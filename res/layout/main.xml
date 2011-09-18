@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:orientation="vertical"
+	android:layout_width="fill_parent"
+	android:layout_height="fill_parent">
+
+    <TextView android:id="@+id/CurrentLocationText"
+    	android:layout_height="wrap_content"
+    	android:layout_width="fill_parent"
+    	android:layout_alignParentTop="true"
+    	android:layout_above="@+id/CurrentLocationButton"
+    	android:layout_centerHorizontal="true"
+    	android:layout_centerInParent="true" 
+    	android:gravity="center"
+    	android:text="@string/current_location"
+    	android:clickable="false" />
+
+    <Button android:id="@+id/CurrentLocationButton"
+    	android:layout_height="wrap_content" 
+    	android:layout_width="fill_parent" 
+    	android:layout_below="@+id/CurrentLocationText" 
+    	android:layout_above="@+id/MapViewControl"
+    	android:layout_centerHorizontal="true" 
+    	android:layout_centerInParent="true" 
+    	android:gravity="center"
+    	android:text="@string/current_location" 
+    	android:clickable="true" 
+    	android:onClick="changeLocation" />
+
+	<com.google.android.maps.MapView  android:id="@+id/MapViewControl"
+		android:layout_height="wrap_content" 
+		android:layout_width="fill_parent" 
+		android:layout_below="@+id/CurrentLocationButton"
+		android:layout_above="@+id/FindMeARideButton" 
+		android:layout_centerInParent="true" 
+    	android:gravity="center"
+    	android:clickable="true" 
+    	android:apiKey="@string/mapView_debug_API_key" />
+
+    <Button android:id="@+id/FindMeARideButton"
+    	android:layout_height="wrap_content" 
+    	android:layout_width="fill_parent"
+    	android:layout_alignParentBottom="true"
+    	android:layout_below="@+id/MapViewControl" 
+    	android:layout_centerInParent="true" 
+    	android:gravity="center"
+    	android:text="@string/find_me_a_ride"
+    	android:clickable="true"
+    	android:onClick="runSearch" />
+
+</LinearLayout>

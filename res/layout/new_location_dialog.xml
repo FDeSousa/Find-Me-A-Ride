@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="wrap_content"
+  android:layout_height="wrap_content"
+  android:orientation="horizontal"
+  >
+
+	<EditText android:id="@+id/newLocationText"
+		android:layout_height="wrap_content"
+		android:layout_width="wrap_content"
+		android:text="Enter new location"
+		android:enabled="false"
+		android:editable="true"
+		android:clickable="true"
+		android:inputType="text"
+		android:focusable="true"
+		android:focusableInTouchMode="true"
+		android:capitalize="words"
+		android:singleLine="true"
+		/>
+
+	<Button android:id="@+id/cancel_button"
+		android:layout_height="wrap_content"
+		android:layout_width="wrap_content"
+		android:layout_below="@+id/auto_locate"
+		android:layout_alignRight="@+id/newLocationText"
+		android:onClick="cancelCustomLocation"
+		android:text="Cancel"
+		/>
+
+	<Button android:id="@+id/ok_button"
+		android:layout_height="wrap_content"
+		android:layout_width="wrap_content"
+		android:onClick="confirmCustomLocation"
+		android:layout_below="@+id/auto_locate"
+		android:layout_toLeftOf="@+id/cancel_button"
+		android:text="OK"
+		/>
+		
+	<CheckBox android:id="@+id/auto_locate"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_below="@+id/newLocationText"
+		android:layout_alignParentLeft="true"
+		android:layout_alignParentRight="true"
+		android:checked="true"
+		android:text="Auto-locate me"
+		/>
+
+</RelativeLayout>

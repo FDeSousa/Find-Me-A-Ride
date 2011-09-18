@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FindMeARide</string>
+    <string name="current_location">Current Location</string>
+    <string name="find_me_a_ride">Find Me A Ride!</string>
+</resources>
