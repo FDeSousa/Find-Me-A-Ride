@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.util.List;
 
 import android.app.Dialog;
+import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -76,12 +78,20 @@ public class FindMeARide extends MapActivity {
 	/**	Store the marker drawable we'll use on the map overlay			*/
 	private Drawable marker;
 	/**	Used to determine whether to use lastKnownLoc data or not		*/
-	private boolean auto_locate_user;
+	private boolean auto_locate_user = true;
 
 	/** Called when the activity is first created.	*/
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+
+		//	Set window preferences
+		this.requestWindowFeature(Window.FEATURE_NO_TITLE);
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
+		//	main.xml contains our MapView and Buttons
+		setContentView(R.layout.main);
+
 		//	Setup the main activity and its visible controls where necessary
 		setupMain();
 		//	Setup our custom Dialog and its controls
@@ -102,27 +112,23 @@ public class FindMeARide extends MapActivity {
 			mapView.getOverlays().add(myLocationOverlay);
 
 			//	Get a new lastKnownLoc for convenience, within onResume rather than onCreate
-			//	Just in case LocationManager doesn't provide lastKnownLoc in
-			//+	time for it to be called first-time (rather likely to happen)
-			long startTime = System.nanoTime();
-			float runningTime = 0;
-			do {
+			for (int i = 0; i < 50; i++) {
 				lastKnownLoc = myLocationOverlay.getLastFix();
-				if (lastKnownLoc != null) break; // Just in case the lastKnownLoc is updated before threshold
+				if (lastKnownLoc != null)
+					break;
+			}
 
-				//	Check how long this loop has been running for, otherwise we might need to quit
-				runningTime += (System.nanoTime() - startTime) / 1000000000.0f;
-				if (runningTime >= 10.0) {			//	Taken 10 seconds? Warn the user that's not normal
-					Toast.makeText(this, "Taking longer than expected to lock on location", Toast.LENGTH_SHORT);
-				} else if (runningTime >= 20.0) {	//	Taken 20 seconds? Warn the user again
-					Toast.makeText(this, "Cannot get a GPS location. Taking longer than expected", Toast.LENGTH_LONG);
-				} else if (runningTime >= 30.0) {	//	If it's been over 30 seconds, user may not have data connection
-					Toast.makeText(this, "GPS taking too long. May not have GPS enabled/Data connection active", Toast.LENGTH_LONG);
-				}
-			} while (lastKnownLoc == null);
-
+			if (lastKnownLoc == null) {
+				//	Last resort method for getting location fix
+				LocationManager locMan = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+				lastKnownLoc = locMan.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+			}
+			
 			//	call convenience method that looks up the address
-			getAddressFromLocation();
+			if (lastKnownLoc != null) {
+				//	If it couldn't get a location fix by now, we don't want to run this here
+				getAddressFromLocation();
+			}
 		}
 
 		// call convenience method that zooms map on our location
@@ -147,13 +153,6 @@ public class FindMeARide extends MapActivity {
 	 *	and its related views, controls, etc.
 	 */
 	private void setupMain() {
-		//	main.xml contains our MapView and Buttons
-		setContentView(R.layout.main);
-
-		//	Set window preferences
-		this.requestWindowFeature(Window.FEATURE_NO_TITLE);
-		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-
 		//	Extract the Button from layout as the text will be updated later
 		locationButton = (Button) findViewById(R.id.CurrentLocationButton);
 		locationButton.setText("Manually Set Location");
@@ -177,9 +176,6 @@ public class FindMeARide extends MapActivity {
 		 * mapView.getRight(),			//	Use the current Right of the MapView
 		 * t + mapViewHeight);			//	Set Bottom as Top plus the calculated Height
 		 */
-
-		//	We want to automatically locate the user by default
-		auto_locate_user = true;
 	}
 
 	/**
@@ -193,15 +189,6 @@ public class FindMeARide extends MapActivity {
 		dialog.setCancelable(true);
 		//	new_location_dialog.xml contains Buttons, Checkbox and EditText
 		dialog.setContentView(R.layout.new_location_dialog);
-
-		autoLocate = (CheckBox) findViewById(R.id.auto_locate);
-		//	Checkbox should have same checked state as boolean auto_locate_user
-		autoLocate.setChecked(auto_locate_user);
-
-		//	Instantiate the EditText with newLocationText control
-		customLocation = (EditText) findViewById(R.id.newLocationText);
-		//	Disabled when auto_locate_user is true and vice versa
-		customLocation.setEnabled(!auto_locate_user);
 		/**	End of Dialog box setup	*/
 	}
 
@@ -230,6 +217,18 @@ public class FindMeARide extends MapActivity {
 	 */
 	public void changeLocation(View view) {
 		dialog.show();
+
+		//	To make sure we don't find ourselves with a null in the below
+		autoLocate = (CheckBox) findViewById(R.id.auto_locate);
+		//	Checkbox should have same checked state as boolean auto_locate_user
+		if (autoLocate != null)
+			autoLocate.setChecked(auto_locate_user);
+
+		//	Instantiate the EditText with newLocationText control
+		customLocation = (EditText) findViewById(R.id.newLocationText);
+		//	Disabled when auto_locate_user is true and vice versa
+		if (customLocation != null)
+			customLocation.setEnabled(!auto_locate_user);
 	}
 
 	/**
@@ -314,9 +313,14 @@ public class FindMeARide extends MapActivity {
 			}
 		} catch (IOException e) {
 			Log.e(TAG, "Impossible to connect to Geocoder", e);
+			Toast.makeText(this, "Impossible to connect to Geocoder", Toast.LENGTH_SHORT);
+		} catch (NullPointerException e) {
+			if (lastKnownLoc == null)
+				Log.e(TAG, e.getMessage() + "\tLast Known Location is likely null", e);
 		} finally {
-			Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
-			locationButton.setText(result);
+			//	Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
+			if (result != null)
+				locationButton.setText(result);
 		}
 	}
 
@@ -370,7 +374,10 @@ public class FindMeARide extends MapActivity {
 			mapOverlays.add(itemizedOverlay);
 			mapView.postInvalidate();
 		} else {
-			Toast.makeText(this, "Cannot determine location", Toast.LENGTH_SHORT).show();
+			if (auto_locate_user) {
+				getAddressFromLocation();
+				zoomToMyLocation();
+			}
 		}
 	}
 
