@@ -4,15 +4,12 @@ import java.io.IOException;
 import java.util.List;
 
 import android.app.Dialog;
-import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -26,6 +23,7 @@ import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
 import com.google.android.maps.MapController;
 import com.google.android.maps.MapView;
+import com.google.android.maps.MyLocationOverlay;
 import com.google.android.maps.Overlay;
 import com.google.android.maps.OverlayItem;
 
@@ -53,10 +51,8 @@ public class FindMeARide extends MapActivity {
 	//	Declarations relating to the current or user-entered location
 	/**	Location for a constant record of last-known location of device	*/
 	Location lastKnownLoc;
-	/**	LocationManager provides updates on the current location		*/
-	LocationManager locationManager;
-	/**	For convenience with location updates, store a LocationListener	*/
-	LocationListener locationListener;
+	/**	MyLocationOverlay is being used for current location updates	*/
+	MyLocationOverlay myLocationOverlay;
 	/**	GeoPoint will contain the latitude/longitude pairing of Address	*/
 	GeoPoint geoPoint;
 	/**	Provides address lookup and reverse-address lookup of location	*/
@@ -86,6 +82,71 @@ public class FindMeARide extends MapActivity {
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		//	Setup the main activity and its visible controls where necessary
+		setupMain();
+		//	Setup our custom Dialog and its controls
+		setupDialog();
+		//	Setup our MapView and the related other classes
+		setupMapView();
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+
+		//	Should add the below code to a new Thread later on
+		//	If user wants to be automatically located, do so
+		if (auto_locate_user) {
+			myLocationOverlay.enableMyLocation();
+			mapView.getOverlays().clear();
+			mapView.getOverlays().add(myLocationOverlay);
+
+			//	Get a new lastKnownLoc for convenience, within onResume rather than onCreate
+			//	Just in case LocationManager doesn't provide lastKnownLoc in
+			//+	time for it to be called first-time (rather likely to happen)
+			long startTime = System.nanoTime();
+			float runningTime = 0;
+			do {
+				lastKnownLoc = myLocationOverlay.getLastFix();
+				if (lastKnownLoc != null) break; // Just in case the lastKnownLoc is updated before threshold
+
+				//	Check how long this loop has been running for, otherwise we might need to quit
+				runningTime += (System.nanoTime() - startTime) / 1000000000.0f;
+				if (runningTime >= 10.0) {			//	Taken 10 seconds? Warn the user that's not normal
+					Toast.makeText(this, "Taking longer than expected to lock on location", Toast.LENGTH_SHORT);
+				} else if (runningTime >= 20.0) {	//	Taken 20 seconds? Warn the user again
+					Toast.makeText(this, "Cannot get a GPS location. Taking longer than expected", Toast.LENGTH_LONG);
+				} else if (runningTime >= 30.0) {	//	If it's been over 30 seconds, user may not have data connection
+					Toast.makeText(this, "GPS taking too long. May not have GPS enabled/Data connection active", Toast.LENGTH_LONG);
+				}
+			} while (lastKnownLoc == null);
+
+			//	call convenience method that looks up the address
+			getAddressFromLocation();
+		}
+
+		// call convenience method that zooms map on our location
+		zoomToMyLocation();
+	}
+
+	@Override
+	public void onConfigurationChanged(final Configuration newConfig) {
+		//	Ignore orientation changes
+		super.onConfigurationChanged(newConfig);
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+		if (auto_locate_user)
+			myLocationOverlay.disableMyLocation();
+	}
+
+	/**
+	 *	Convenience method for setting up the main activity (this one)
+	 *	and its related views, controls, etc.
+	 */
+	private void setupMain() {
 		//	main.xml contains our MapView and Buttons
 		setContentView(R.layout.main);
 
@@ -96,10 +157,36 @@ public class FindMeARide extends MapActivity {
 		//	Extract the Button from layout as the text will be updated later
 		locationButton = (Button) findViewById(R.id.CurrentLocationButton);
 		locationButton.setText("Manually Set Location");
+		// Extract the MapView from layout to work with it
+		mapView = (MapView) findViewById(R.id.MapViewControl);
+
+		/*
+		 *	For now, I'm going to leave the MapView taking up far too much space. Deal with it...
+		 *	
+		 * //	Get the view's height and width in pixels for setting view sizes
+		 * DisplayMetrics displaymetrics = new DisplayMetrics();
+		 * getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
+		 * //	Setup the different control sizes
+		 * int mapViewHeight = displaymetrics.heightPixels
+		 * - (locationButton.getHeight()
+		 * + findViewById(R.id.CurrentLocationText).getHeight()
+		 * + findViewById(R.id.FindMeARideButton).getHeight());
+		 * int t = mapView.getTop();			//	Get Top now for convenience
+		 * mapView.layout(mapView.getLeft(),	//	Use the current Left of the MapView
+		 * t,							//	Use the current Top of the MapView
+		 * mapView.getRight(),			//	Use the current Right of the MapView
+		 * t + mapViewHeight);			//	Set Bottom as Top plus the calculated Height
+		 */
 
 		//	We want to automatically locate the user by default
 		auto_locate_user = true;
+	}
 
+	/**
+	 *	Convenience method for setting up the custom Dialog and its controls
+	 */
+	private void setupDialog() {
+		/**	Setup the Dialog box, will add to convenience method later	*/
 		//	Initialise our custom Dialog for later use
 		dialog = new Dialog(this);
 		dialog.setTitle("Set Custom Location");
@@ -115,19 +202,15 @@ public class FindMeARide extends MapActivity {
 		customLocation = (EditText) findViewById(R.id.newLocationText);
 		//	Disabled when auto_locate_user is true and vice versa
 		customLocation.setEnabled(!auto_locate_user);
+		/**	End of Dialog box setup	*/
+	}
 
-		//	Instantiate the new LocationListener to use with LocationManager
-		locationListener = new FindMeALocationListener(this);
-		//	Get a LocationManager from the system to get updates on the
-		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-
+	private void setupMapView() {
 		//	android.R.drawable.ic_menu_mylocation refers to the 
 		//+	standard GPS tracking icon in Android
 		marker = getResources().getDrawable(android.R.drawable.ic_menu_mylocation);
 		marker.setBounds(0, 0, marker.getIntrinsicWidth(), marker.getIntrinsicHeight());
 
-		// Extract the MapView from layout to work with it
-		mapView = (MapView) findViewById(R.id.MapViewControl);
 		//	Add on the zoom controls
 		mapView.setBuiltInZoomControls(true);
 		//	Make sure the map is pan and zoom enabled
@@ -136,68 +219,9 @@ public class FindMeARide extends MapActivity {
 		mapOverlays = mapView.getOverlays();
 		//	Instantiate with our ItemizedOverlay subclass
 		itemizedOverlay = new FindMeAnItemizedOverlay(marker, this);
-	}
 
-	@Override
-	protected void onResume() {
-		super.onResume();
-
-		//	By default, we want to get location updates
-		requestLocationUpdates();
-
-		//	Get a new lastKnownLoc for convenience, within onResume rather than onCreate
-		//	Just in case LocationManager doesn't provide lastKnownLoc in
-		//+	time for it to be called first-time (rather likely to happen)
-		long startTime = System.nanoTime();
-		float runningTime = 0;
-		while (lastKnownLoc == null) {
-			//	For safety, keep checking its status, and attempt to get while it's null
-			lastKnownLoc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-			if (lastKnownLoc != null) break; // Just in case the lastKnownLoc is updated before threshold
-
-			//	Check how long this loop has been running for, otherwise we might need to quit
-			runningTime += (System.nanoTime() - startTime) / 1000000000.0f;
-			if (runningTime >= 10.0) {			//	Taken 10 seconds? Warn the user that's not normal
-				Toast.makeText(this, "Taking longer than expected to lock on location", Toast.LENGTH_SHORT);
-			} else if (runningTime >= 20.0) {	//	Taken 20 seconds? Warn the user again
-				Toast.makeText(this, "Cannot get a GPS location. Taking longer than expected", Toast.LENGTH_LONG);
-			} else if (runningTime >= 30.0) {	//	If it's been over 30 seconds, user may not have data connection
-				Toast.makeText(this, "GPS taking too long. May not have GPS enabled/Data connection active", Toast.LENGTH_LONG);
-			}
-		}
-
-		//	call convenience method that looks up the address
-		if (auto_locate_user)
-			getAddressFromLocation();
-
-		// call convenience method that zooms map on our location
-		zoomToMyLocation();
-	}
-
-	@Override
-	public void onConfigurationChanged(final Configuration newConfig) {
-		//	Ignore orientation changes
-		super.onConfigurationChanged(newConfig);
-	}
-
-	@Override
-	protected void onPause() {
-		super.onPause();
-		locationManager.removeUpdates(locationListener);
-	}
-
-	/**
-	 *	Convenience method for requesting location updates<br/>
-	 *	To stop the Location updates simply call:<ul>
-	 *	<li>locationManager.removeUpdates(locationListener)</li></ul>
-	 */
-	public void requestLocationUpdates() {
-		//	This can take an awfully long time to get the initial location data
-		locationManager.requestLocationUpdates(
-				LocationManager.GPS_PROVIDER,		//	Updates provided by GPS
-				MINIMUM_TIME_BETWEEN_UPDATES,		//	Minimum time between updates
-				MINIMUM_DISTANCE_CHANGE_FOR_UPDATES,//	Minimum distance change between updates
-				locationListener);					//	Using our LocationListener instance
+		//	Instantiating a new MyLocationOverlay to add current location to MapView
+		myLocationOverlay = new MyLocationOverlay(this, mapView);
 	}
 
 	/**
@@ -348,14 +372,6 @@ public class FindMeARide extends MapActivity {
 		} else {
 			Toast.makeText(this, "Cannot determine location", Toast.LENGTH_SHORT).show();
 		}
-	}
-
-	/**
-	 *	Convenience method for FindMeALocationListener instance
-	 *	@param location - the new Location instance to set lastKnownLoc as
-	 */
-	public void setLastKnownLocation(Location location) {
-		lastKnownLoc = location;
 	}
 
 	@Override
