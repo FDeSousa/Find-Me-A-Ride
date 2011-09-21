@@ -11,6 +11,7 @@ import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
@@ -25,7 +26,6 @@ import com.google.android.maps.GeoPoint;
 import com.google.android.maps.MapActivity;
 import com.google.android.maps.MapController;
 import com.google.android.maps.MapView;
-import com.google.android.maps.MyLocationOverlay;
 import com.google.android.maps.Overlay;
 import com.google.android.maps.OverlayItem;
 
@@ -33,10 +33,10 @@ public class FindMeARide extends MapActivity {
 	//	Static and final declarations
 	/**	Activity-specific tag for logging purposes						*/
 	private final static String TAG = "FindMeARide:MapActivity";
-	/**	Minimum distance change in metres; 10 metres					*/
-	static final long MINIMUM_DISTANCE_CHANGE_FOR_UPDATES = 10;
-	/**	Minimum time between updates in milliseconds; 30 seconds		*/
-	static final long MINIMUM_TIME_BETWEEN_UPDATES = 30000;
+	/**	Minimum distance change in metres; 1 metres						*/
+	static final long MINIMUM_DISTANCE_CHANGE_FOR_UPDATES = 1;
+	/**	Minimum time between updates in milliseconds; 2 minutes			*/
+	static final long MINIMUM_TIME_BETWEEN_UPDATES = 1000 * 60 * 2;
 	/**	The default message and snippet text for an overlay item		*/
 	static final String DEFAULT_OVERLAY_ITEM_MESSAGE = "You're here!";
 
@@ -53,8 +53,10 @@ public class FindMeARide extends MapActivity {
 	//	Declarations relating to the current or user-entered location
 	/**	Location for a constant record of last-known location of device	*/
 	Location lastKnownLoc;
-	/**	MyLocationOverlay is being used for current location updates	*/
-	MyLocationOverlay myLocationOverlay;
+	/**	Used to provide location updates in conjunction with Listener	*/
+	LocationManager locationManager;
+	/**	LocationListener for receiving regular location updates			*/
+	LocationListener locationListener;
 	/**	GeoPoint will contain the latitude/longitude pairing of Address	*/
 	GeoPoint geoPoint;
 	/**	Provides address lookup and reverse-address lookup of location	*/
@@ -107,23 +109,21 @@ public class FindMeARide extends MapActivity {
 		//	Should add the below code to a new Thread later on
 		//	If user wants to be automatically located, do so
 		if (auto_locate_user) {
-			myLocationOverlay.enableMyLocation();
-			mapView.getOverlays().clear();
-			mapView.getOverlays().add(myLocationOverlay);
-
+			//	We want to request that Location be updated, use convenience method for this
+			requestLocationUpdates();
+			
 			//	Get a new lastKnownLoc for convenience, within onResume rather than onCreate
 			for (int i = 0; i < 50; i++) {
-				lastKnownLoc = myLocationOverlay.getLastFix();
+				lastKnownLoc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 				if (lastKnownLoc != null)
 					break;
 			}
 
 			if (lastKnownLoc == null) {
 				//	Last resort method for getting location fix
-				LocationManager locMan = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-				lastKnownLoc = locMan.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+				lastKnownLoc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
 			}
-			
+
 			//	call convenience method that looks up the address
 			if (lastKnownLoc != null) {
 				//	If it couldn't get a location fix by now, we don't want to run this here
@@ -144,8 +144,8 @@ public class FindMeARide extends MapActivity {
 	@Override
 	protected void onPause() {
 		super.onPause();
-		if (auto_locate_user)
-			myLocationOverlay.disableMyLocation();
+		//	Stop receiving updates while paused
+		locationManager.removeUpdates(locationListener);
 	}
 
 	/**
@@ -158,6 +158,9 @@ public class FindMeARide extends MapActivity {
 		locationButton.setText("Manually Set Location");
 		// Extract the MapView from layout to work with it
 		mapView = (MapView) findViewById(R.id.MapViewControl);
+		
+		locationListener = new FindMeALocationListener(this);
+		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
 		/*
 		 *	For now, I'm going to leave the MapView taking up far too much space. Deal with it...
@@ -207,8 +210,7 @@ public class FindMeARide extends MapActivity {
 		//	Instantiate with our ItemizedOverlay subclass
 		itemizedOverlay = new FindMeAnItemizedOverlay(marker, this);
 
-		//	Instantiating a new MyLocationOverlay to add current location to MapView
-		myLocationOverlay = new MyLocationOverlay(this, mapView);
+		
 	}
 
 	/**
@@ -256,14 +258,6 @@ public class FindMeARide extends MapActivity {
 		}
 		//	Then update the map by zooming to the location
 		zoomToMyLocation();
-	}
-
-	/**
-	 *	onClick for new_location_dialog.cancel_button calls this method
-	 */
-	public void cancelCustomLocation(View view) {
-		//	Quite simply cancel the current dialog, we don't need it
-		dialog.cancel();
 	}
 
 	/**
@@ -364,7 +358,7 @@ public class FindMeARide extends MapActivity {
 					(int)(address.getLongitude() * 1E6));	//	Longitude in microdegrees
 			//	Now zoom into the current location on the map
 			mapController.animateTo(geoPoint);
-			mapController.setZoom(15);
+			mapController.setZoom(18);
 			//	Clear the overlays to make sure we only ever have one icon
 			mapOverlays.clear();
 			itemizedOverlay.clearOverlays();
@@ -383,4 +377,38 @@ public class FindMeARide extends MapActivity {
 
 	@Override
 	protected boolean isRouteDisplayed() { return false; }
+
+	/**
+	 *	Convenience method for requesting that we receive Location updates<br />
+	 *	To stop these updates simply call:<ul>
+	 *	<li>locationManager.removeUpdates(locationListener)</li></ul>
+	 */
+	private void requestLocationUpdates() {
+		locationManager.requestLocationUpdates(
+				LocationManager.GPS_PROVIDER, 
+				MINIMUM_TIME_BETWEEN_UPDATES, 
+				MINIMUM_DISTANCE_CHANGE_FOR_UPDATES, 
+				locationListener);
+	}
+	
+	/**
+	 *	Linked with use in FindMeALocationListener class, used to
+	 *	update lastKnownLoc when a newer location is available, but
+	 *	depending upon new location data being more accurate/newer
+	 *	@param location
+	 */
+	public void setLastKnownLocation(Location location) {
+		//if (lastKnownLoc == null) {
+		//	For now, do no checks on the location data, simply overwrite the previous one
+			//	Any location data is better than none at all
+			synchronized (location) {
+				lastKnownLoc = location;				
+			}
+		//}
+		
+		if (auto_locate_user) {
+			getAddressFromLocation();
+			zoomToMyLocation();
+		}
+	}
 }
