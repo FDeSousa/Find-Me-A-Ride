@@ -16,10 +16,14 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.EditText;
+import android.widget.TextView.BufferType;
 import android.widget.Toast;
 
 import com.google.android.maps.GeoPoint;
@@ -75,6 +79,16 @@ public class FindMeARide extends MapActivity {
 	private CheckBox autoLocate;
 	/**	EditText instance for the custom location text in Dialog		*/
 	private EditText customLocation;
+	/**	OnCheckedChangedListener for enabling/disabling EditText		*/
+	private OnCheckedChangeListener customLocationOnChecked;
+	/**	Instance of the PositiveButton from Dialog						*/
+	private Button positiveButton;
+	/**	Instance of the NegativeButton from Dialog						*/
+	private Button negativeButton;
+	/**	OnClickListener for the positiveButton in Dialog				*/
+	private OnClickListener positiveButtonOnClick;
+	/**	OnClickListener for the negativeButton in Dialog				*/
+	private OnClickListener negativeButtonOnClick;
 
 	//	Other private declarations
 	/**	Store the marker drawable we'll use on the map overlay			*/
@@ -111,7 +125,7 @@ public class FindMeARide extends MapActivity {
 		if (auto_locate_user) {
 			//	We want to request that Location be updated, use convenience method for this
 			requestLocationUpdates();
-			
+
 			//	Get a new lastKnownLoc for convenience, within onResume rather than onCreate
 			for (int i = 0; i < 50; i++) {
 				lastKnownLoc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
@@ -158,41 +172,75 @@ public class FindMeARide extends MapActivity {
 		locationButton.setText("Manually Set Location");
 		// Extract the MapView from layout to work with it
 		mapView = (MapView) findViewById(R.id.MapViewControl);
-		
+
 		locationListener = new FindMeALocationListener(this);
 		locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-
-		/*
-		 *	For now, I'm going to leave the MapView taking up far too much space. Deal with it...
-		 *	
-		 * //	Get the view's height and width in pixels for setting view sizes
-		 * DisplayMetrics displaymetrics = new DisplayMetrics();
-		 * getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
-		 * //	Setup the different control sizes
-		 * int mapViewHeight = displaymetrics.heightPixels
-		 * - (locationButton.getHeight()
-		 * + findViewById(R.id.CurrentLocationText).getHeight()
-		 * + findViewById(R.id.FindMeARideButton).getHeight());
-		 * int t = mapView.getTop();			//	Get Top now for convenience
-		 * mapView.layout(mapView.getLeft(),	//	Use the current Left of the MapView
-		 * t,							//	Use the current Top of the MapView
-		 * mapView.getRight(),			//	Use the current Right of the MapView
-		 * t + mapViewHeight);			//	Set Bottom as Top plus the calculated Height
-		 */
 	}
 
 	/**
 	 *	Convenience method for setting up the custom Dialog and its controls
 	 */
 	private void setupDialog() {
-		/**	Setup the Dialog box, will add to convenience method later	*/
 		//	Initialise our custom Dialog for later use
 		dialog = new Dialog(this);
 		dialog.setTitle("Set Custom Location");
 		dialog.setCancelable(true);
 		//	new_location_dialog.xml contains Buttons, Checkbox and EditText
 		dialog.setContentView(R.layout.new_location_dialog);
-		/**	End of Dialog box setup	*/
+
+		//	Instantiate the EditText with newLocationText control
+		customLocation = (EditText) dialog.findViewById(R.id.newLocationText);
+		//	Instantiate the CheckBox with auto_locate control
+		autoLocate = (CheckBox) dialog.findViewById(R.id.auto_locate);
+		//	Instantiate the Button with positiveButton
+		positiveButton = (Button) dialog.findViewById(R.id.positiveButton);
+		//	Instantiate the Button with negativeButton
+		negativeButton = (Button) dialog.findViewById(R.id.negativeButton);
+
+		//	Setup the OnClickListener and set it for Dialog.positiveButton
+		positiveButtonOnClick = new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				String customAddress = customLocation.getText().toString();
+
+				auto_locate_user = autoLocate.isChecked();
+
+				//	If user has auto_locate checked:
+				if (!auto_locate_user && customAddress != null) {
+					//	Call a convenience method to find the address for us
+					getAddressFromLocationName(customAddress);
+				} else {
+					//	Otherwise, get from user's current location
+					getAddressFromLocation();
+				}
+				//	Then update the map by zooming to the location
+				zoomToMyLocation();
+
+				dialog.hide();
+			}
+		};
+		if (positiveButton != null)
+			positiveButton.setOnClickListener(positiveButtonOnClick);
+		
+		//	Setup the OnClickListener and set it for Dialog.negativeButton
+		negativeButtonOnClick = new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				dialog.hide();
+			}
+		};
+		if (negativeButton != null)
+			negativeButton.setOnClickListener(negativeButtonOnClick);
+
+		//	Setup the OnCheckedChangeListener and set it for Dialog.auto_locate
+		customLocationOnChecked = new OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				toggleCustomLocation(isChecked);
+			}
+		};
+		if (autoLocate != null)
+			autoLocate.setOnCheckedChangeListener(customLocationOnChecked);
 	}
 
 	private void setupMapView() {
@@ -209,63 +257,32 @@ public class FindMeARide extends MapActivity {
 		mapOverlays = mapView.getOverlays();
 		//	Instantiate with our ItemizedOverlay subclass
 		itemizedOverlay = new FindMeAnItemizedOverlay(marker, this);
-
-		
 	}
 
 	/**
 	 *	onClick for CurrentLocationButton calls this method
 	 *	@param view - Required View instance
 	 */
-	public void changeLocation(View view) {
+	public void currentLocationButton(View v) {
+		autoLocate.setChecked(auto_locate_user);
 		dialog.show();
-
-		//	To make sure we don't find ourselves with a null in the below
-		autoLocate = (CheckBox) findViewById(R.id.auto_locate);
-		//	Checkbox should have same checked state as boolean auto_locate_user
-		if (autoLocate != null)
-			autoLocate.setChecked(auto_locate_user);
-
-		//	Instantiate the EditText with newLocationText control
-		customLocation = (EditText) findViewById(R.id.newLocationText);
-		//	Disabled when auto_locate_user is true and vice versa
-		if (customLocation != null)
-			customLocation.setEnabled(!auto_locate_user);
 	}
 
 	/**
 	 *	onClick for FindMeARideButton calls this method
 	 */
-	public void runSearch(View view) {
+	public void findMeARideButton(View v) {
 		//	Should start up the next Activity, which doesn't exist yet
 		//+	but then this button isn't even visible as yet...
-	}
-
-	/**
-	 *	onClick for new_location_dialog.ok_button calls this method
-	 */
-	public void confirmCustomLocation(View view) {
-		EditText customLocationText = (EditText) view.findViewById(R.id.newLocationText);
-		String customAddress = customLocationText.getText().toString();
-
-		//	If user has auto_locate checked:
-		if (auto_locate_user && customAddress != null) {
-			//	Call a convenience method to find the address for us
-			getAddressFromLocationName(customAddress);			
-		} else {
-			//	Otherwise, get from user's current location
-			getAddressFromLocation();
-		}
-		//	Then update the map by zooming to the location
-		zoomToMyLocation();
+		Toast.makeText(this, "Find Me A Ride! button clicked", Toast.LENGTH_LONG);
 	}
 
 	/**
 	 *	onClick for new_location_dialog.auto_locate calls this method
 	 */
-	public void autoLocate(View view) {
-		CheckBox auto_locate = (CheckBox) view.findViewById(R.id.auto_locate);
-		EditText customLocationText = (EditText) view.findViewById(R.id.newLocationText);
+	public void autoLocate(View v) {
+		CheckBox auto_locate = (CheckBox) v.findViewById(R.id.auto_locate);
+		EditText customLocationText = (EditText) v.findViewById(R.id.newLocationText);
 
 		if (auto_locate.isChecked()) {
 			//	User wants to be automatically located from now on
@@ -282,6 +299,31 @@ public class FindMeARide extends MapActivity {
 			customLocationText.setEnabled(!auto_locate_user);	//	Always opposite of auto_locate_user
 			//	No more operations here as getAddressFromLocationName is called
 			//+	only when the user presses the OK button
+		}
+	}
+
+	/**
+	 *	Toggles whether the user is using a Custom Location or an Automatically
+	 *	tracked Location.<br />
+	 *	If isChecked is true, should disable editing of the text in EditText, but
+	 *	otherwise it should enable editing the EditText control
+	 *
+	 *	@param isChecked - the new state for whether or not to enable EditText
+	 */
+	public void toggleCustomLocation(boolean isChecked) {
+		if (customLocation != null) {
+			//	Enable it if it's not checked and vice versa
+			customLocation.setEnabled(!isChecked);
+			customLocation.setClickable(!isChecked);
+			customLocation.setFocusable(!isChecked);
+			customLocation.setFocusableInTouchMode(!isChecked);
+
+			if (isChecked) {
+				customLocation.setText(customLocation.getText().toString(), BufferType.NORMAL);
+			} else {
+				customLocation.setText(customLocation.getText().toString(), BufferType.EDITABLE);
+				customLocation.requestFocus();
+			}
 		}
 	}
 
@@ -390,7 +432,7 @@ public class FindMeARide extends MapActivity {
 				MINIMUM_DISTANCE_CHANGE_FOR_UPDATES, 
 				locationListener);
 	}
-	
+
 	/**
 	 *	Linked with use in FindMeALocationListener class, used to
 	 *	update lastKnownLoc when a newer location is available, but
@@ -400,12 +442,12 @@ public class FindMeARide extends MapActivity {
 	public void setLastKnownLocation(Location location) {
 		//if (lastKnownLoc == null) {
 		//	For now, do no checks on the location data, simply overwrite the previous one
-			//	Any location data is better than none at all
-			synchronized (location) {
-				lastKnownLoc = location;				
-			}
+		//	Any location data is better than none at all
+		synchronized (location) {
+			lastKnownLoc = location;				
+		}
 		//}
-		
+
 		if (auto_locate_user) {
 			getAddressFromLocation();
 			zoomToMyLocation();

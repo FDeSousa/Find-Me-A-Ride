@@ -1,49 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout
-  xmlns:android="http://schemas.android.com/apk/res/android"
-  android:layout_width="wrap_content"
-  android:layout_height="wrap_content"
-  android:orientation="horizontal"
-  >
-
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/new_loc_dialog_layout"
+	android:layout_height="wrap_content"
+	android:layout_width="wrap_content"
+	android:orientation="horizontal"
+	android:padding="5dip"
+	android:background="@android:drawable/screen_background_light"
+>
 	<EditText android:id="@+id/newLocationText"
-		android:layout_height="wrap_content"
-		android:layout_width="wrap_content"
-		android:text="Enter new location"
-		android:enabled="false"
+		android:layout_height="wrap_content" 
+		android:layout_width="fill_parent"
+		android:enabled="false" 
 		android:editable="true"
-		android:clickable="true"
-		android:inputType="text"
-		android:focusable="true"
-		android:focusableInTouchMode="true"
+		android:clickable="false" 
+		android:inputType="text" 
+		android:focusable="false"
+		android:focusableInTouchMode="false" 
 		android:capitalize="words"
-		android:singleLine="true"
-		/>
+		android:singleLine="true" 
+		android:hint="Enter new location" 
+	/>
 
-	<Button android:id="@+id/cancel_button"
+	<CheckBox android:id="@+id/auto_locate" 
 		android:layout_height="wrap_content"
-		android:layout_width="wrap_content"
-		android:layout_below="@+id/auto_locate"
-		android:layout_alignRight="@+id/newLocationText"
-		android:text="Cancel"
-		/>
-
-	<Button android:id="@+id/ok_button"
-		android:layout_height="wrap_content"
-		android:layout_width="wrap_content"
-		android:layout_below="@+id/auto_locate"
-		android:layout_toLeftOf="@+id/cancel_button"
-		android:text="OK"
-		/>
-		
-	<CheckBox android:id="@+id/auto_locate"
-		android:layout_width="wrap_content"
-		android:layout_height="wrap_content"
+		android:layout_width="fill_parent" 
 		android:layout_below="@+id/newLocationText"
-		android:layout_alignParentLeft="true"
+		android:layout_alignParentLeft="true" 
 		android:layout_alignParentRight="true"
-		android:checked="true"
-		android:text="Auto-locate me"
-		/>
-
+		android:checked="true" 
+		android:textColor="#888888"
+		android:text="Auto-locate me" 
+	/>
+	
+	<Button android:id="@+id/positiveButton" 
+		android:layout_height="wrap_content" 
+		android:layout_width="100dip"
+		android:layout_below="@+id/auto_locate" 
+		android:layout_alignParentLeft="true"
+		android:text="OK" 
+	/>
+	<Button android:id="@+id/negativeButton"
+		android:layout_height="wrap_content"
+		android:layout_width="100dip"
+		android:layout_alignTop="@+id/positiveButton"
+		android:layout_toRightOf="@+id/positiveButton"
+		android:text="Cancel"
+	/>
 </RelativeLayout>

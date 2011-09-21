@@ -27,7 +27,7 @@
     	android:gravity="center"
     	android:text="@string/current_location" 
     	android:clickable="true" 
-    	android:onClick="changeLocation" />
+    	android:onClick="currentLocationButton" />
 
 	<com.google.android.maps.MapView  android:id="@+id/MapViewControl"
 		android:layout_height="wrap_content" 
@@ -50,6 +50,6 @@
     	android:gravity="center"
     	android:text="@string/find_me_a_ride"
     	android:clickable="true"
-    	android:onClick="runSearch" />
+    	android:onClick="findMeARideButton" />
 
 </LinearLayout>
