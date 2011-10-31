@@ -439,14 +439,10 @@ public class FindMeARide extends MapActivity {
 	 *	depending upon new location data being more accurate/newer
 	 *	@param location
 	 */
-	public void setLastKnownLocation(Location location) {
-		//if (lastKnownLoc == null) {
+	public synchronized void setLastKnownLocation(Location location) {
 		//	For now, do no checks on the location data, simply overwrite the previous one
 		//	Any location data is better than none at all
-		synchronized (location) {
-			lastKnownLoc = location;				
-		}
-		//}
+		lastKnownLoc = location;
 
 		if (auto_locate_user) {
 			getAddressFromLocation();
